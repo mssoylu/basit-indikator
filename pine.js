@@ -1,23 +1,19 @@
 //@version=5
-indicator("Sakin Grafik: EMA, Yıllık-Aylık-Haftalık Açılış, RSI", overlay=true)
+indicator("Sakin Grafik: EMA, Yıllık-Aylık-Haftalık Açılış, RSI & Hacim Tablosu", overlay=true)
 
 // ==========================================
 // --- ZAMAN DİLİMİ KONTROLLERİ ---
 // ==========================================
-// 4 saat = 14400 saniye. Grafik 4 saat ve üzeriyse Yıllık çizgi görünür.
 goster_yil_cizgisini = (timeframe.in_seconds() >= 14400)
-// 1 saat = 3600 saniye. Grafik 1 saat ve üzeriyse Aylık çizgi görünür.
 goster_ay_cizgisini  = (timeframe.in_seconds() >= 3600)
 
 // ==========================================
 // --- GÜVENLİ ZAMAN VE FİYAT VERİLERİ ---
 // ==========================================
-// En son aktif dönemlerin başlangıç zamanları (Zaman koordinatı için kesin veriler)
 yil_baslangici   = request.security(syminfo.tickerid, "12M", time, lookahead=barmerge.lookahead_on)
 ay_baslangici    = request.security(syminfo.tickerid, "M",   time, lookahead=barmerge.lookahead_on)
 hafta_baslangici = request.security(syminfo.tickerid, "W",   time, lookahead=barmerge.lookahead_on)
 
-// En son aktif dönemlerin açılış fiyatları
 yo = request.security(syminfo.tickerid, "12M", open, lookahead=barmerge.lookahead_on)
 mo = request.security(syminfo.tickerid, "M",   open, lookahead=barmerge.lookahead_on)
 wo = request.security(syminfo.tickerid, "W",   open, lookahead=barmerge.lookahead_on)
@@ -25,15 +21,19 @@ wo = request.security(syminfo.tickerid, "W",   open, lookahead=barmerge.lookahea
 // ==========================================
 // --- GİRDİLER VE EMA ---
 // ==========================================
+show20  = input.bool(false, "EMA 20 Göster")
 show50  = input.bool(true,  "EMA 50 Göster")
+show100 = input.bool(false, "EMA 100 Göster")
 show200 = input.bool(true,  "EMA 200 Göster")
-plot(show50  ? ta.ema(close, 50)  : na, color=color.orange, title="EMA 50", linewidth=1)
+
+plot(show20  ? ta.ema(close, 20)  : na, color=color.green,  title="EMA 20",  linewidth=1)
+plot(show50  ? ta.ema(close, 50)  : na, color=color.orange, title="EMA 50",  linewidth=1)
+plot(show100 ? ta.ema(close, 100) : na, color=color.purple, title="EMA 100", linewidth=1)
 plot(show200 ? ta.ema(close, 200) : na, color=color.red,    title="EMA 200", linewidth=1)
 
 // ==========================================
-// --- KESİNTİSİZ ÇİZGİLER, ETİKETLER VE HAFTALIK LİMİTLER ---
+// --- KESİNTİSİZ ÇİZGİLER VE ETİKETLER ---
 // ==========================================
-// NOT: Geçmişe dönük basamaklar çizen tüm "plot" fonksiyonları kaldırılmıştır.
 var line lineYO = na
 var line lineMO = na
 var line lineWO = na
@@ -48,31 +48,30 @@ if barstate.islast
     int bar_ms = nz(time - time[1], 60000)
     int x2_time = time + (bar_ms * 14)
     
-    // Her yeni barda eski çizgileri silerek sadece en güncel olanı tutar
     line.delete(lineYO)
     line.delete(lineMO)
     line.delete(lineWO)
     line.delete(lineHigh)
     line.delete(lineLow)
     
-    // 1. SADECE SON AKTİF YILIN AÇILIŞ ÇİZGİSİ
     if goster_yil_cizgisini and not na(yil_baslangici) and not na(yo)
         lineYO := line.new(yil_baslangici, yo, x2_time, yo, xloc=xloc.bar_time, color=color.new(#2904ce, 0), width=1, style=line.style_solid)
         label.set_xy(lblYO, x2_time, yo)
+        label.set_text(lblYO, "Y (" + str.tostring(yo, "#.##") + ")")
     else
         label.set_xy(lblYO, na, na)
 
-    // 2. SADECE SON AKTİF AYIN AÇILIŞ ÇİZGİSİ
     if goster_ay_cizgisini and not na(ay_baslangici) and not na(mo)
         lineMO := line.new(ay_baslangici, mo, x2_time, mo, xloc=xloc.bar_time, color=color.new(#028dff, 0), width=1, style=line.style_solid)
         label.set_xy(lblMO, x2_time, mo)
+        label.set_text(lblMO, "M (" + str.tostring(mo, "#.##") + ")")
     else
         label.set_xy(lblMO, na, na)
 
-    // 3. SADECE SON AKTİF HAFTANIN AÇILIŞ VE LİMİT ÇİZGİLERİ
     if not na(hafta_baslangici) and not na(wo)
         lineWO := line.new(hafta_baslangici, wo, x2_time, wo, xloc=xloc.bar_time, color=color.new(#79c6f3, 0), width=1, style=line.style_solid)
         label.set_xy(lblWO, x2_time, wo)
+        label.set_text(lblWO, "W (" + str.tostring(wo, "#.##") + ")")
         
         float gercek_haftalik_high = high
         float gercek_haftalik_low  = low
@@ -109,3 +108,48 @@ if not na(rsiTEPE)
     if rsiVal[lbRight] < lastTepeRsi and high[lbRight] > lastTepePrice
         line.new(lastTepeBar, lastTepePrice, bar_index - lbRight, high[lbRight], color=color.new(color.red, 0), width=1)
     lastTepeBar := bar_index - lbRight, lastTepeRsi := rsiVal[lbRight], lastTepePrice := high[lbRight]
+
+// ==========================================
+// --- SON 200 MUM HACİM HESAPLAMALARI ---
+// ==========================================
+current_vol = volume        // Canlı mumun güncel hacmi
+avg_vol     = ta.sma(volume, 200)
+
+if barstate.islast
+    float max_vol_200 = na
+    float min_vol_200 = na
+    
+    for i = 0 to 199
+        if na(volume[i]) 
+            break
+        
+        if na(max_vol_200) or volume[i] > max_vol_200
+            max_vol_200 := volume[i]
+            
+        if volume[i] > 0
+            if na(min_vol_200) or volume[i] < min_vol_200
+                min_vol_200 := volume[i]
+
+    // Tablo satır sayısını 4'e çıkardık (rows = 4)
+    var table volTable = table.new(position = position.bottom_right, columns = 2, rows = 5, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.gray)
+    
+    // 1. Satır: Güncel Canlı Mum Hacmi
+    table.cell(volTable, 0, 0, "Hacim", text_color=color.white, text_size=size.normal, text_halign=text.align_left)
+    table.cell(volTable, 1, 0, "")
+    
+    
+    // 1. Satır: Güncel Canlı Mum Hacmi
+    table.cell(volTable, 0, 0, "Güncel", text_color=color.white, text_size=size.normal, text_halign=text.align_left)
+    table.cell(volTable, 1, 0, na(current_vol) ? "---" : str.tostring(current_vol, format.volume), text_color=color.orange, text_size=size.normal, text_halign=text.align_right)
+    
+    // 2. Satır: Son 200 Mumun En Yüksek Hacmi
+    table.cell(volTable, 0, 1, "En Yüksek (200)", text_color=color.white, text_size=size.normal, text_halign=text.align_left)
+    table.cell(volTable, 1, 1, na(max_vol_200) ? "---" : str.tostring(max_vol_200, format.volume), text_color=color.green, text_size=size.normal, text_halign=text.align_right)
+    
+    // 3. Satır: Ortalama Hacim (20)
+    table.cell(volTable, 0, 2, "Ortalama (200)", text_color=color.white, text_size=size.normal, text_halign=text.align_left)
+    table.cell(volTable, 1, 2, na(avg_vol) ? "---" : str.tostring(avg_vol, format.volume), text_color=color.aqua, text_size=size.normal, text_halign=text.align_right)
+    
+    // 4. Satır: Son 200 Mumun En Düşük Hacmi
+    table.cell(volTable, 0, 3, "En Düşük (200)", text_color=color.white, text_size=size.normal, text_halign=text.align_left)
+    table.cell(volTable, 1, 3, na(min_vol_200) ? "---" : str.tostring(min_vol_200, format.volume), text_color=color.red, text_size=size.normal, text_halign=text.align_right)
